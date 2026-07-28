@@ -140,7 +140,14 @@ def attach_media_bytes_to_response(
 # Sub-Agent A: Dedicated image generator using gemini-3.1-flash-image
 image_generation_agent = Agent(
     name="image_generation_agent",
-    model=ConfiguredGemini(model="gemini-3.5-flash"),
+    model=ConfiguredGemini(
+        model="gemini-3.5-flash",
+        config=types.GenerateContentConfig(
+            temperature=0.4,
+            frequency_penalty=0.3,
+            presence_penalty=0.1,
+        ),
+    ),
     planner=BuiltInPlanner(
         thinking_config=types.ThinkingConfig(
             thinking_budget=1024,
@@ -155,12 +162,13 @@ image_generation_agent = Agent(
     3. If this is a regeneration of a previously generated media, pass the rejected media file name as `old_lifestyle_media_file_name`.
     4. Immediately after the tool execution completes:
        - Present the summary list of the generated media, including the public URL, authenticated URL, GCS path, and product ID.
-       - Natively render/embed the generated media directly in your response so the user can view it (MANDATORY: do not wrap in backticks or code blocks): ![Lifestyle Image](public_url)
+       - Natively render/embed the generated media directly in your response using exactly this raw markdown format without code blocks: ![Lifestyle Image](public_url)
        - Ask the user in plain text: "Would you like to review the generated media?"
+       - IMPORTANT: Immediately stop generating any further text after asking this question.
        
     Handle user responses:
     - If the user wants to review (says "yes", "Review", or "StartReview"):
-      - Transfer control to the `review_sub_agent` using the `transfer_to_agent` tool to begin the review loop.
+      - Write a brief confirmation such as "Retrieving details for review..." and then immediately call the `transfer_to_agent` tool to transfer control to `review_sub_agent`. Do not output repetitive filler text.
     - If the user chooses to skip (says "no", "Skip", or "SkipReview"), conclude the session professionally.""",
     tools=[generate_and_save_lifestyle_image],
     after_model_callback=attach_media_bytes_to_response,
@@ -169,7 +177,14 @@ image_generation_agent = Agent(
 # Sub-Agent B: Dedicated video generator using veo-3.1-fast-generate-001
 video_generation_agent = Agent(
     name="video_generation_agent",
-    model=ConfiguredGemini(model="gemini-3.5-flash"),
+    model=ConfiguredGemini(
+        model="gemini-3.5-flash",
+        config=types.GenerateContentConfig(
+            temperature=0.4,
+            frequency_penalty=0.3,
+            presence_penalty=0.1,
+        ),
+    ),
     planner=BuiltInPlanner(
         thinking_config=types.ThinkingConfig(
             thinking_budget=1024,
@@ -184,12 +199,13 @@ video_generation_agent = Agent(
     3. If this is a regeneration of a previously generated media, pass the rejected media file name as `old_lifestyle_media_file_name`.
     4. Immediately after the tool execution completes:
        - Present the summary list of the generated media, including the public URL, authenticated URL, GCS path, and product ID.
-       - Natively render/embed the generated media directly in your response so the user can view it (MANDATORY: do not wrap in backticks or code blocks): <video src="public_url" controls width="100%"></video>
+       - Natively render/embed the generated media directly in your response using exactly this raw HTML5 format without code blocks: <video src="public_url" controls width="100%"></video>
        - Ask the user in plain text: "Would you like to review the generated media?"
+       - IMPORTANT: Immediately stop generating any further text after asking this question.
        
     Handle user responses:
     - If the user wants to review (says "yes", "Review", or "StartReview"):
-      - Transfer control to the `review_sub_agent` using the `transfer_to_agent` tool to begin the review loop.
+      - Write a brief confirmation such as "Retrieving details for review..." and then immediately call the `transfer_to_agent` tool to transfer control to `review_sub_agent`. Do not output repetitive filler text.
     - If the user chooses to skip (says "no", "Skip", or "SkipReview"), conclude the session professionally.""",
     tools=[generate_and_save_lifestyle_video],
     after_model_callback=attach_media_bytes_to_response,
@@ -198,7 +214,14 @@ video_generation_agent = Agent(
 # Sub-Agent C: Dedicated Image/Video Review Specialist
 review_sub_agent = Agent(
     name="review_sub_agent",
-    model=ConfiguredGemini(model="gemini-3.5-flash"),
+    model=ConfiguredGemini(
+        model="gemini-3.5-flash",
+        config=types.GenerateContentConfig(
+            temperature=0.4,
+            frequency_penalty=0.3,
+            presence_penalty=0.1,
+        ),
+    ),
     planner=BuiltInPlanner(
         thinking_config=types.ThinkingConfig(
             thinking_budget=2048,
@@ -210,8 +233,8 @@ review_sub_agent = Agent(
     When you are invoked:
     1. Show the user the generated image/video GCS path, authenticated URL, public URL, and product details.
     2. Natively render/embed the generated media directly in your response so the user can view it:
-       - For images, embed it using raw markdown (MANDATORY: do not wrap in backticks or code blocks): ![Lifestyle Image](public_url)
-       - For videos, embed it using a raw HTML5 video tag (MANDATORY: do not wrap in backticks or code blocks): <video src="public_url" controls width="100%"></video>
+       - For images, embed it using exactly this raw markdown format without code blocks: ![Lifestyle Image](public_url)
+       - For videos, embed it using exactly this raw HTML5 video tag format without code blocks: <video src="public_url" controls width="100%"></video>
     3. Ask the user in plain text: "Would you like to approve this generated media or regenerate it?"
     
     Handle user responses:
@@ -220,7 +243,7 @@ review_sub_agent = Agent(
       - Confirm the approval with a success message in plain text.
     - **If the user says they want to regenerate** (e.g. types "Regenerate" or says "Please regenerate"):
       - Ask the user for any specific additional stylistic or camera directions (if not already provided).
-      - Transfer control to `image_generation_agent` (for image files) or `video_generation_agent` (for video files) to generate the new media for that product, passing the `product_id`, `additional_instructions` (if any), and the rejected media file name as `old_lifestyle_media_file_name`.
+      - Write a brief confirmation such as "Transferring to generate new media..." and then immediately call the `transfer_to_agent` tool to transfer control to `image_generation_agent` (for image files) or `video_generation_agent` (for video files) to generate the new media for that product, passing the `product_id`, `additional_instructions` (if any), and the rejected media file name as `old_lifestyle_media_file_name`.
       - Once you transfer control to the generating agent, that agent will handle presenting the newly generated media and asking the user if they want to review it.""",
     sub_agents=[],
     tools=[
@@ -256,7 +279,14 @@ SYSTEM_INSTRUCTION = f"{ROLE_DESCRIPTION}\n\n{WORKFLOW_DESCRIPTION}"
 
 root_agent = Agent(
     name="root_agent",
-    model=ConfiguredGemini(model="gemini-3.5-flash"),
+    model=ConfiguredGemini(
+        model="gemini-3.5-flash",
+        config=types.GenerateContentConfig(
+            temperature=0.4,
+            frequency_penalty=0.3,
+            presence_penalty=0.1,
+        ),
+    ),
     planner=BuiltInPlanner(
         thinking_config=types.ThinkingConfig(
             thinking_budget=2048,
